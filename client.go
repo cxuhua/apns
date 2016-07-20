@@ -3,7 +3,6 @@ package apns
 import (
 	"crypto/tls"
 	"errors"
-	"log"
 	"net"
 	"strings"
 )
@@ -23,50 +22,52 @@ type ApnsClient struct {
 	Gateway string
 	Conn    *tls.Conn
 	Conf    *tls.Config
-	Pool    []*Notification
 }
 
 func NewClient(gateway, crtFile, keyFile string) *ApnsClient {
+	cert, err := tls.LoadX509KeyPair(crtFile, keyFile)
+	if err != nil {
+		panic(err)
+	}
 	c := new(ApnsClient)
 	c.Gateway = gateway
 	c.Conn = nil
-	cert, err := tls.LoadX509KeyPair(crtFile, keyFile)
-	if err != nil {
-		return nil
-	}
 	gatewayParts := strings.Split(c.Gateway, ":")
 	c.Conf = &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ServerName:   gatewayParts[0],
 	}
-	c.Pool = []*Notification{}
 	return c
 }
 
 //发送队列中的所有通知
-func (this *ApnsClient) Send() error {
-	err := this.connect()
-	if err != nil {
-		return err
-	}
-	for _, d := range this.Pool {
-		b, err := d.ToBytes()
-		if err != nil {
-			log.Println("apns pool tobytes error", err)
-			continue
-		}
-		this.Conn.Write(b)
-	}
+func (this *ApnsClient) Close() error {
 	return this.Conn.Close()
 }
 
-//加入对列
-func (this *ApnsClient) Append(pn *Notification) {
-	this.Pool = append(this.Pool, pn)
+//发送队列中的所有通知
+func (this *ApnsClient) Write(pn *Notification) error {
+	b, err := pn.ToBytes()
+	if err != nil {
+		return err
+	}
+	l := len(b)
+	s := 0
+	for {
+		n, err := this.Conn.Write(b[s:])
+		if err != nil {
+			return err
+		}
+		s += n
+		if s >= l {
+			break
+		}
+	}
+	return nil
 }
 
 //连接到apns服务器
-func (this *ApnsClient) connect() error {
+func (this *ApnsClient) Connect() error {
 	conn, err := net.Dial("tcp", this.Gateway)
 	if err != nil {
 		return err
