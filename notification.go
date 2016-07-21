@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"math/rand"
 	"strconv"
-	"time"
 )
 
 // Push commands always start with command value 2.
@@ -82,12 +80,17 @@ type Notification struct {
 	Priority    uint8
 }
 
+var (
+	id = int32(0)
+)
+
 // NewNotification creates and returns a Notification structure.
 // It also initializes the pseudo-random identifier.
 func NewNotification() (pn *Notification) {
+	id++
 	pn = new(Notification)
 	pn.payload = make(map[string]interface{})
-	pn.Identifier = rand.New(rand.NewSource(time.Now().UnixNano())).Int31n(IdentifierUbound)
+	pn.Identifier = id
 	pn.Priority = 10
 	return
 }
